@@ -88,10 +88,13 @@
     
     var bg;
     let spaceship;
-
+    var ProjectileType = {
+        METEOR: 0,
+        MISSILE: 1,
+    };
     class Projectile
     {
-        constructor(spriteName, position, speed)
+        constructor(spriteName, position, speed, projectileType)
         {
             this.projectile = new Sprite(Resources[spriteName].texture);
             this.projectile.x = position.x;
@@ -101,6 +104,8 @@
             this.projectile.pivot.set(0.5, 0.5);
 
             this.speed = speed;
+            this.type = projectileType;
+
         }
 
         setTarget(target)
@@ -110,24 +115,30 @@
 
         static normalize (target, origin) 
         {
-            var norm = Math.sqrt(Math.pow((target.x - origin.x), 2) + Math.pow((target.y - origin.y), 2));
+            var deltaX = target.x - origin.x;
+            var deltaY = target.y - origin.y;
+            var norm = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
             
             if(norm == 0) {
                 return {x:0, y:0};
             }    
             
-            var nx = (target.x - origin.x) / norm;
-            var ny = (target.y - origin.y) / norm;
+            var nx = deltaX / norm;
+            var ny = deltaY / norm;
 
             return {x:nx, y:ny};
         } 
         
         update (delta)
         {
-            if(this.direction)
+            if(this.type == ProjectileType.METEOR)
+            {
                 this.moveToTarget();
-            else
+            }
+            else if(this.type == ProjectileType.MISSILE)
+            {
                 this.moveTowardsRotation();
+            }
 
         }
 
@@ -142,11 +153,21 @@
             this.projectile.x += this.speed * Math.cos(this.projectile.rotation);
             this.projectile.y += this.speed * Math.sin(this.projectile.rotation);
         }
+
+        collisionTest(target, maxDistance)
+        {
+            var deltaX = target.x - this.projectile.x;
+            var deltaY = target.y - this.projectile.y;
+            var norm = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
+
+
+            return norm < maxDistance;
+        }
     }
 
     class ButtonFactory
     {
-        static createButton(spriteName, position, rect)
+        static createButton(spriteName, position)
         {
             let texture = Resources[spriteName].texture;
             var button = new Sprite(texture);
@@ -228,6 +249,47 @@
 
     }
 
+    class MainScene
+    {
+        constructor(sceneName)
+        {
+            this.name = sceneName;
+
+            this.container = new PIXI.Container();
+
+            app.stage.addChild(this.container);
+
+        }
+
+        initialize()
+        {
+            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600}, 
+            {x:0, y:0, width:64, height:64});
+
+            
+            this.container.addChild(this.buttonMove);
+
+        }
+
+        setViewController(uiViewController)
+        {
+
+            this.buttonMove
+                .on('pointerdown', delta => {  })
+                .on('pointerup',  delta => {  } )
+                .on('pointerupoutside', () => { } )
+                .on('pointerover', () => { } )
+                .on('pointerout', () => { } );
+
+        }
+
+        update(delta)
+        {
+            
+        }
+    }
+
+
     class UIScene
     {
         constructor(sceneName)
@@ -243,20 +305,18 @@
 
         initialize()
         {
-            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600}, 
-            {x:0, y:0, width:64, height:64});
+            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600});
 
-            this.buttonRight = ButtonFactory.createButton(gameTex.buttonRight, {x:340, y:660}, 
-            {x:64, y:0, width:64, height:64});
+            this.buttonRight = ButtonFactory.createButton(gameTex.buttonRight, {x:340, y:660});
 
-            this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660}, 
-            {x:0, y:64, width:64, height:64});
+            this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660});
 
-           
+            this.buttonFire = ButtonFactory.createButton(gameTex.buttonLeft, {x:240, y:690});
 
             this.container.addChild(this.buttonMove);
             this.container.addChild(this.buttonRight);
             this.container.addChild(this.buttonLeft);
+            this.container.addChild(this.buttonFire);
         }
 
         setShipControls(ship)
@@ -281,6 +341,16 @@
                 .on('pointerout', () => { ship.turnShip(0);} );
         }
 
+        setInputListener(inputListener)
+        {
+            this.buttonFire
+                .on('pointerdown', () => {  })
+                .on('pointerup',  () => { inputListener.spawnMissiles(); } )
+                .on('pointerupoutside', () => {} )
+                .on('pointerover', () => { } )
+                .on('pointerout', () => { } );
+        }
+
         update(delta)
         {
             
@@ -291,6 +361,12 @@
     {
         meteorsPool = [];
         meteorsActive = [];
+
+        missilesPool = [];
+        missilesActive = [];
+
+        maxMeteor = 10;
+        maxMissiles = 50;
 
         constructor(sceneName)
         {
@@ -325,14 +401,45 @@
             return fixedSpawns[index];
         }
 
+        // Pooling Meteors 
         spawnMeteor()
         {
-            var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), 2);
-            
-            meteor.setTarget(this.playerShip.ship);
-            this.container.addChild(meteor.projectile);
+            if(this.meteorsActive.length < this.maxMeteor && this.meteorsPool.length < 1)
+            {
+                var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), 2, ProjectileType.METEOR);
+                
+                meteor.setTarget(this.playerShip.ship);
+                this.container.addChild(meteor.projectile);
 
-            this.meteorsActive.push(meteor);
+                this.meteorsActive.push(meteor);
+            }
+            else if (this.meteorsPool.length > 0)
+            {
+                var meteorObj = this.meteorsPool.pop();
+                meteorObj.projectile.position = this.getRandomLocation();
+                this.container.addChild(meteorObj.projectile);
+                meteorObj.setTarget(this.playerShip.ship);
+                this.meteorsActive.push(meteorObj);
+            }
+        }
+
+        spawnMissiles()
+        {
+            if(this.missilesActive.length < this.maxMissiles && this.missilesPool.length < 1)
+            {
+                var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, 2,  ProjectileType.MISSILE);
+                this.container.addChild(missileObj.projectile);
+                missileObj.projectile.rotation = this.playerShip.ship.rotation;
+                this.missilesActive.push(missileObj);
+            }
+            else if (this.missilesPool.length > 0)
+            {
+                var missileObj = this.missilesPool.pop();
+                missileObj.projectile.position = this.playerShip.ship.position;
+                missileObj.projectile.rotation = this.playerShip.ship.rotation;
+                this.container.addChild(missileObj.projectile);
+                this.missilesActive.push(missileObj);
+            }
         }
 
         isOutOfBounds(target)
@@ -356,26 +463,62 @@
                     this.playerShip.update(delta)
                 }
 
-                if(this.meteorsActive.length > 0)
+                this.updateMeteorPositions(delta);
+                this.updateMissilePositions(delta);
+                break;
+            }
+        }
+
+        updateMeteorPositions(delta)
+        {
+            if(this.meteorsActive.length > 0)
+            {
+                for(var ctr = 0; ctr < this.meteorsActive.length; ctr++)
                 {
-                    for(var ctr = 0; ctr < this.meteorsActive.length; ctr++)
+                    if(this.isOutOfBounds(this.meteorsActive[ctr].projectile))
                     {
-                        if(this.isOutOfBounds(this.meteorsActive[ctr].projectile))
+                        var meteorObj = this.meteorsActive[ctr];
+                        this.container.removeChild(meteorObj.projectile);
+                        this.meteorsActive.splice(ctr, 1);
+                        ctr--;
+                        this.meteorsPool.push(meteorObj);
+                    }
+                    else 
+                    {
+                        this.meteorsActive[ctr].update(delta);
+                        if(this.meteorsActive[ctr].collisionTest(this.playerShip.ship, 32))
                         {
+                            console.log("PlayerShip HP deduction");
                             var meteorObj = this.meteorsActive[ctr];
-                            this.container.removeChild(meteorObj);
+                            this.container.removeChild(meteorObj.projectile);
                             this.meteorsActive.splice(ctr, 1);
                             ctr--;
                             this.meteorsPool.push(meteorObj);
                         }
-                        else 
-                        {
-                            console.log("Move meteors " + ctr);
-                            this.meteorsActive[ctr].update(delta)
-                        }
                     }
                 }
-                break;
+            }
+        }
+
+        updateMissilePositions(delta)
+        {
+            if(this.missilesActive.length > 0)
+            {
+                for(var ctr = 0; ctr < this.missilesActive.length; ctr++)
+                {
+                    if(this.isOutOfBounds(this.missilesActive[ctr].projectile))
+                    {
+                        var missileObj = this.missilesActive[ctr];
+                        this.container.removeChild(missileObj.projectile);
+                        this.missilesActive.splice(ctr, 1);
+                        ctr--;
+                        this.missilesPool.push(missileObj);
+                    }
+                    else 
+                    {
+                        this.missilesActive[ctr].update(delta);
+                    }
+                }
             }
         }
     }
@@ -411,6 +554,7 @@
         uiScene.initialize();
 
         uiScene.setShipControls(gameboardScene.playerShip);
+        uiScene.setInputListener(gameboardScene);
 
         app.ticker.add(delta => {gameboardScene.update(delta);});
         app.ticker.add(delta => {uiScene.update(delta);});
