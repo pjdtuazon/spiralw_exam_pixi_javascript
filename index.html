@@ -1,0 +1,498 @@
+<!doctype html>
+<html>
+<head>
+  <style>
+  canvas {
+    padding: 0;
+    margin: auto;
+    display: block;
+   
+  }
+  </style>
+  <meta charset="utf-8">
+  <title>Hello World</title>
+</head>
+  <script src="pixi/pixi.min.js"></script>
+  <script src="game/Utils.js"></script>
+<body>
+  <canvas id="gamecanvas"></canvas>
+  <script type="text/javascript">
+    
+  //Create a Pixi Application
+    const canvas = document.getElementById("gamecanvas");
+
+    let screenHeight = 720;
+    let screenWidth = 480;
+
+    var GameState = {
+        INITIALIZE: 0, //no state, not running and pre-start
+        START: 1, // initializing
+        RUNNING: 2,
+        PAUSED: 3, // pause ticker
+        GAME_OVER: 4, // set game over
+    };
+
+    var fixedSpawns = [
+         {x:100, y:100},
+         {x:100, y:400},
+         {x:200, y:100},
+         {x:300, y:500},
+         {x:150, y:20},
+         ];
+
+    let gameState = GameState.START;
+
+    console.log("Created app and canvas");
+
+    //Add the canvas that Pixi automatically created for you to the HTML document
+    let app = new PIXI.Application({
+    view: canvas, 
+    width: screenWidth, 
+    height: screenHeight,
+    resolution: window.devicePixelRatio,
+    autoDensity: true
+    });
+
+    var distanceCur = 0;
+    let Application = PIXI.Application,
+        TextureLoader = PIXI.loader,
+        TextureCache = PIXI.utils.TextureCache;
+        Resources = PIXI.loader.resources,
+        Sprite = PIXI.Sprite;
+    
+    app.render(app.stage);
+
+    var gameTex = {
+        bg: "img/sprite_text.png", 
+        play_button: "img/button_test1.png",
+        spaceship: "img/test.png",
+        meteor: "img/meteor.png",
+        missile: "img/missile.png",
+        buttonAtlas: "img/controls.png",
+        buttonMove: "img/buttonmove.png",
+        buttonRight: "img/buttonright.png",
+        buttonLeft: "img/buttonleft.png"
+    };
+
+    for (var key in gameTex){
+        console.log("key " + gameTex[key]);
+        TextureLoader.add(gameTex[key])
+    };
+
+   TextureLoader.load(setup);
+
+    
+
+    let mainScene = new PIXI.Container();
+    let gameScene = new PIXI.Container();
+    
+    var bg;
+    let spaceship;
+
+    class Projectile
+    {
+        constructor(spriteName, position, speed)
+        {
+            this.projectile = new Sprite(Resources[spriteName].texture);
+            this.projectile.x = position.x;
+            this.projectile.y = position.y;
+            
+            this.projectile.anchor.set(0.5, 0.5);
+            this.projectile.pivot.set(0.5, 0.5);
+
+            this.speed = speed;
+        }
+
+        setTarget(target)
+        {
+            this.direction = Projectile.normalize(target, this.projectile);
+        }
+
+        static normalize (target, origin) 
+        {
+            var norm = Math.sqrt(Math.pow((target.x - origin.x), 2) + Math.pow((target.y - origin.y), 2));
+            
+            if(norm == 0) {
+                return {x:0, y:0};
+            }    
+            
+            var nx = (target.x - origin.x) / norm;
+            var ny = (target.y - origin.y) / norm;
+
+            return {x:nx, y:ny};
+        } 
+        
+        update (delta)
+        {
+            if(this.direction)
+                this.moveToTarget();
+            else
+                this.moveTowardsRotation();
+
+        }
+
+        moveToTarget()
+        {
+            this.projectile.x += this.direction.x * this.speed;
+            this.projectile.y += this.direction.y * this.speed;
+        }
+
+        moveTowardsRotation()
+        {
+            this.projectile.x += this.speed * Math.cos(this.projectile.rotation);
+            this.projectile.y += this.speed * Math.sin(this.projectile.rotation);
+        }
+    }
+
+    class ButtonFactory
+    {
+        static createButton(spriteName, position, rect)
+        {
+            let texture = Resources[spriteName].texture;
+            var button = new Sprite(texture);
+
+            button.x = position.x;
+            button.y = position.y;
+
+            button.pivot.set(0.5, 0.5);
+            button.anchor.set(0.5, 0.5);
+
+            button.interactive = true;
+            button.buttonMode = true;
+
+            return button;
+        }
+
+        static createButtonFromAtlas(spriteName, position, rect)
+        {
+            let texture = Resources[spriteName].texture;
+            var rectangle = new PIXI.Rectangle(rect.x, rect.y, rect.width, rect.height);
+            texture.frame = rectangle;
+            var button = new Sprite(texture);
+
+            button.x = position.x;
+            button.y = position.y;
+
+            button.pivot.set(0.5, 0.5);
+            button.anchor.set(0.5, 0.5);
+
+            button.interactive = true;
+            button.buttonMode = true;
+
+            return button;
+        }
+
+    }
+
+    class BattleShip 
+    {
+        turnSpeed = 5;
+        velocity = 0;
+        turnDirection = 0;
+
+        constructor(spriteName, position, velocity)
+        {
+            this.ship =  new Sprite(Resources[spriteName].texture);
+            this.ship.anchor.set(0.5, 0.5);
+            this.ship.pivot.set(0.5, 0.5);
+            this.ship.x = position.x;
+            this.ship.y = position.y;
+            this.velocity = velocity;
+
+            this.ship.rotation = Utils.degToRad(-90);
+        }
+
+        turnShip = function(turn)
+        {
+            this.turnDirection = turn;
+        }
+
+        move = function (moveForward) {
+            this.moveShip = moveForward;
+        }
+        
+        update (delta)
+        {
+            if(this.turn != 0)
+            {
+                this.ship.rotation += Utils.degToRad(this.turnSpeed * this.turnDirection);   
+            }
+
+            if(this.moveShip)
+            {
+                this.ship.x += this.velocity * Math.cos(this.ship.rotation);
+                this.ship.y += this.velocity * Math.sin(this.ship.rotation);
+            }
+
+        }
+
+    }
+
+    class UIScene
+    {
+        constructor(sceneName)
+        {
+            this.name = sceneName;
+
+            this.container = new PIXI.Container();
+
+            app.stage.addChild(this.container);
+
+            
+        }
+
+        initialize()
+        {
+            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600}, 
+            {x:0, y:0, width:64, height:64});
+
+            this.buttonRight = ButtonFactory.createButton(gameTex.buttonRight, {x:340, y:660}, 
+            {x:64, y:0, width:64, height:64});
+
+            this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660}, 
+            {x:0, y:64, width:64, height:64});
+
+           
+
+            this.container.addChild(this.buttonMove);
+            this.container.addChild(this.buttonRight);
+            this.container.addChild(this.buttonLeft);
+        }
+
+        setShipControls(ship)
+        {
+            this.buttonRight
+                .on('pointerdown', () => { ship.turnShip(1); })
+                .on('pointerup',  () => { ship.turnShip(0); } )
+                .on('pointerupoutside', () => { ship.turnShip(0);} )
+                .on('pointerover', () => { ship.turnShip(0);} )
+                .on('pointerout', () => { ship.turnShip(0);} );
+            this.buttonMove
+                .on('pointerdown', delta => { ship.move(true); })
+                .on('pointerup',  delta => { ship.move(false); } )
+                .on('pointerupoutside', () => { ship.turnShip(0);} )
+                .on('pointerover', () => { ship.turnShip(0);} )
+                .on('pointerout', () => { ship.turnShip(0);} );
+            this.buttonLeft
+                .on('pointerdown', () => { ship.turnShip(-1); })
+                .on('pointerup',  () => { ship.turnShip(0); } )
+                .on('pointerupoutside', () => { ship.turnShip(0);} )
+                .on('pointerover', () => { ship.turnShip(0);} )
+                .on('pointerout', () => { ship.turnShip(0);} );
+        }
+
+        update(delta)
+        {
+            
+        }
+    }
+
+    class GameScene
+    {
+        meteorsPool = [];
+        meteorsActive = [];
+
+        constructor(sceneName)
+        {
+            this.name = sceneName;
+
+            this.container = new PIXI.Container();
+
+            app.stage.addChild(this.container);
+
+            
+        }
+
+        initialize()
+        {
+            this.playerShip  = new BattleShip (gameTex.spaceship, {x:240, y:360}, 1);
+            
+            this.container.addChild(this.playerShip.ship);
+
+        }
+
+        getRandomLocation()
+        {
+            // var xRandomValue, yRandomValue;
+
+            // xRandomValue = (Math.random() * 10) + 200 * (Math.random() < 0.5 ? -1 : 1);
+            // yRandomValue = (Math.random() * 10) + 400 * (Math.random() < 0.5 ? -1 : 1);
+
+            var index = Math. floor((Math.random() * 5));
+            console.log("Index Spawn " + index);
+            
+            //return {x:xRandomValue, y:yRandomValue};
+            return fixedSpawns[index];
+        }
+
+        spawnMeteor()
+        {
+            var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), 2);
+            
+            meteor.setTarget(this.playerShip.ship);
+            this.container.addChild(meteor.projectile);
+
+            this.meteorsActive.push(meteor);
+        }
+
+        isOutOfBounds(target)
+        {
+            
+            if(target.x > 1000 || target.x < -600 || target.y < -600|| target.y > 1000)
+            {
+                return true;
+            }
+        }
+
+        update(delta)
+        {
+            switch(gameState)
+            {
+            case  GameState.START:
+                break;
+            case GameState.RUNNING:
+                if(this.playerShip != null)
+                {
+                    this.playerShip.update(delta)
+                }
+
+                if(this.meteorsActive.length > 0)
+                {
+                    for(var ctr = 0; ctr < this.meteorsActive.length; ctr++)
+                    {
+                        if(this.isOutOfBounds(this.meteorsActive[ctr].projectile))
+                        {
+                            var meteorObj = this.meteorsActive[ctr];
+                            this.container.removeChild(meteorObj);
+                            this.meteorsActive.splice(ctr, 1);
+                            ctr--;
+                            this.meteorsPool.push(meteorObj);
+                        }
+                        else 
+                        {
+                            console.log("Move meteors " + ctr);
+                            this.meteorsActive[ctr].update(delta)
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    let gameboardScene = new GameScene("GameboardScene");
+    let uiScene = new UIScene("UIScene");
+    // setup scenes
+    function setup()
+    {
+        console.log("gameTex[play_button] " + gameTex.play_button);
+        bg = new Sprite(Resources[gameTex.play_button].texture);
+        bg.pivot.set(0.5, 0.5);
+        bg.anchor.set(0.5, 0.5);
+        bg.scale.set(5, 5);
+
+        let playButton = new Sprite(Resources[gameTex.play_button].texture);
+        playButton.pivot.set(0.5, 0.5);
+        playButton.anchor.set(0.5, 0.5);
+        
+        playButton.x = 240;
+        playButton.y = 360;
+
+        playButton.interactive = true;
+        playButton.buttonMode = true;
+        playButton.on('pointerdown', onButtonDown)
+        .on('pointerup', triggerAnimationUp)
+        .on('pointerupoutside', onButtonUp)
+        .on('pointerover', onButtonOver)
+        .on('pointerout', onButtonOut);
+
+
+        gameboardScene.initialize();
+        uiScene.initialize();
+
+        uiScene.setShipControls(gameboardScene.playerShip);
+
+        app.ticker.add(delta => {gameboardScene.update(delta);});
+        app.ticker.add(delta => {uiScene.update(delta);});
+
+        gameState = GameState.RUNNING;
+
+        setTimeout(triggerMeteorFire, 1500);
+
+    }
+
+    function triggerMeteorFire()
+    {
+        setTimeout(triggerMeteorFire, 1500);
+
+        gameboardScene.spawnMeteor();
+    }
+
+    function setupGameScene()
+    {
+
+    }
+
+    
+
+    
+    function onButtonDown() {
+        this.isdown = true;
+    // this.texture = textureButtonDown;
+        this.alpha = 1;
+        console.log("onButtonDown"); 
+    }
+
+    function onButtonUp() {
+        this.isdown = false;
+        if (this.isOver) {
+            //this.texture = textureButtonOver;
+        } else {
+            //this.texture = textureButton;
+        }
+        console.log("onButtonUp"); 
+    }
+
+    function onButtonOver() {
+        this.isOver = true;
+        if (this.isdown) {
+            return;
+        }
+        console.log("onButtonOver"); //this.texture = textureButtonOver;
+    }
+
+    function onButtonOut() {
+        this.isOver = false;
+        if (this.isdown) {
+            return;
+        }
+        console.log("onButtonOut"); //this.texture = textureButton;
+    }
+
+    function triggerAnimationUp()
+    {
+        app.ticker.add(hideTarget);
+        console.log("triggerAnimationUp");
+    }
+    
+    function hideTarget()
+    {
+       
+        var speed = 10;
+        console.log("running " + mainScene.y);
+
+        if(mainScene.y < -360)
+        {
+            console.log("stopping " + mainScene.y);
+            app.ticker.remove(hideTarget);
+        }
+
+        mainScene.y -= speed;
+    }
+
+    document.body.appendChild(app.view);
+
+  </script>
+  
+</body>
+</html>
