@@ -71,7 +71,8 @@
         buttonAtlas: "img/controls.png",
         buttonMove: "img/buttonmove.png",
         buttonRight: "img/buttonright.png",
-        buttonLeft: "img/buttonleft.png"
+        buttonLeft: "img/buttonleft.png",
+        buttonFire: "img/buttonfire.png",
     };
 
     for (var key in gameTex){
@@ -110,24 +111,8 @@
 
         setTarget(target)
         {
-            this.direction = Projectile.normalize(target, this.projectile);
+            this.direction = Utils.normalize(target, this.projectile);
         }
-
-        static normalize (target, origin) 
-        {
-            var deltaX = target.x - origin.x;
-            var deltaY = target.y - origin.y;
-            var norm = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
-            
-            if(norm == 0) {
-                return {x:0, y:0};
-            }    
-            
-            var nx = deltaX / norm;
-            var ny = deltaY / norm;
-
-            return {x:nx, y:ny};
-        } 
         
         update (delta)
         {
@@ -265,10 +250,8 @@
         {
             this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600}, 
             {x:0, y:0, width:64, height:64});
-
             
             this.container.addChild(this.buttonMove);
-
         }
 
         setViewController(uiViewController)
@@ -311,7 +294,7 @@
 
             this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660});
 
-            this.buttonFire = ButtonFactory.createButton(gameTex.buttonLeft, {x:240, y:690});
+            this.buttonFire = ButtonFactory.createButton(gameTex.buttonFire, {x:240, y:690});
 
             this.container.addChild(this.buttonMove);
             this.container.addChild(this.buttonRight);
@@ -469,6 +452,15 @@
             }
         }
 
+        despawnMeteor(index)
+        {
+            var meteorObj = this.meteorsActive[index];
+            this.container.removeChild(meteorObj.projectile);
+            this.meteorsActive.splice(index, 1);
+            
+            this.meteorsPool.push(meteorObj);
+        }
+
         updateMeteorPositions(delta)
         {
             if(this.meteorsActive.length > 0)
@@ -477,27 +469,32 @@
                 {
                     if(this.isOutOfBounds(this.meteorsActive[ctr].projectile))
                     {
-                        var meteorObj = this.meteorsActive[ctr];
-                        this.container.removeChild(meteorObj.projectile);
-                        this.meteorsActive.splice(ctr, 1);
+                        this.despawnMeteor(ctr);
                         ctr--;
-                        this.meteorsPool.push(meteorObj);
                     }
                     else 
                     {
                         this.meteorsActive[ctr].update(delta);
+
                         if(this.meteorsActive[ctr].collisionTest(this.playerShip.ship, 32))
                         {
                             console.log("PlayerShip HP deduction");
-                            var meteorObj = this.meteorsActive[ctr];
-                            this.container.removeChild(meteorObj.projectile);
-                            this.meteorsActive.splice(ctr, 1);
+                            this.despawnMeteor(ctr);
+
                             ctr--;
-                            this.meteorsPool.push(meteorObj);
                         }
                     }
                 }
             }
+        }
+
+        despawnMissiles(index)
+        {
+            var missileObj = this.missilesActive[index];
+            this.container.removeChild(missileObj.projectile);
+            this.missilesActive.splice(index, 1);
+            
+            this.missilesPool.push(missileObj);
         }
 
         updateMissilePositions(delta)
@@ -508,15 +505,27 @@
                 {
                     if(this.isOutOfBounds(this.missilesActive[ctr].projectile))
                     {
-                        var missileObj = this.missilesActive[ctr];
-                        this.container.removeChild(missileObj.projectile);
-                        this.missilesActive.splice(ctr, 1);
+                        
+                        this.despawnMissiles(ctr);
                         ctr--;
-                        this.missilesPool.push(missileObj);
                     }
                     else 
                     {
                         this.missilesActive[ctr].update(delta);
+
+                        for(var ctr2 = 0; ctr2 < this.meteorsActive.length; ctr2++)
+                        {
+                            if(this.meteorsActive[ctr2].collisionTest(this.missilesActive[ctr].projectile, 32))
+                            {
+                                console.log("Destroy meteor");
+                                this.despawnMeteor(ctr2);
+                                
+                                this.despawnMissiles(ctr);
+                                ctr--;
+                                
+                                break;
+                            }
+                        }
                     }
                 }
             }
