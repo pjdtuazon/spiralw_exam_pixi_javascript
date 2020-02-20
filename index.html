@@ -14,12 +14,20 @@
 </head>
   <script src="pixi/pixi.min.js"></script>
   <script src="game/Utils.js"></script>
+  
 <body>
   <canvas id="gamecanvas"></canvas>
   <script type="text/javascript">
     
   //Create a Pixi Application
     const canvas = document.getElementById("gamecanvas");
+
+    
+    const CruiseSpeed=1.5;
+    const TurnSpeed=5;
+    const MissileSpeed=7;
+    const MeteorMaxSpeed=4;
+    const MinShipMeteorCollisionDist=200;
 
     let screenHeight = 720;
     let screenWidth = 480;
@@ -69,7 +77,6 @@
         spaceship: "img/playerShip3_blue.png",
         meteor: "img/meteorBrown_big4.png",
         missile: "img/missile.png",
-        buttonAtlas: "img/controls.png",
         buttonMove: "img/buttonmove.png",
         buttonRight: "img/buttonright.png",
         buttonLeft: "img/buttonleft.png",
@@ -276,7 +283,6 @@
 
     class BattleShip 
     {
-        turnSpeed = 5;
         velocity = 0;
         turnDirection = 0;
 
@@ -305,7 +311,7 @@
         {
             if(this.turn != 0)
             {
-                this.ship.rotation += Utils.degToRad(this.turnSpeed * this.turnDirection);   
+                this.ship.rotation += Utils.degToRad(TurnSpeed * this.turnDirection);   
             }
 
             if(this.moveShip)
@@ -541,7 +547,9 @@
             //console.log("spawnMeteor " + this.meteorsActive.length + " " + this.meteorsPool.length);
             if(this.meteorsActive.length < this.maxMeteor && this.meteorsPool.length < 1)
             {
-                var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), 2, ProjectileType.METEOR);
+                let maxSpeed =  Math.ceil(Math.random() * MeteorMaxSpeed);
+                console.log("maxSpeed " + maxSpeed + "" );
+                var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), maxSpeed, ProjectileType.METEOR);
                 
                 meteor.setTarget(this.playerShip.ship);
                 this.container.addChild(meteor.projectile);
@@ -552,6 +560,7 @@
             {
                 var meteorObj = this.meteorsPool.pop();
                 meteorObj.projectile.position = this.getRandomLocation();
+                meteorObj.speed = Math.ceil(Math.random() * MeteorMaxSpeed);
                 this.container.addChild(meteorObj.projectile);
                 meteorObj.setTarget(this.playerShip.ship);
                 this.meteorsActive.push(meteorObj);
@@ -563,7 +572,7 @@
             //console.log("spawnMissiles " + this.missilesActive.length + " " + this.missilesPool.length);
             if(this.missilesActive.length < this.maxMissiles && this.missilesPool.length < 1)
             {
-                var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, 2,  ProjectileType.MISSILE);
+                var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, MissileSpeed,  ProjectileType.MISSILE);
                 this.container.addChild(missileObj.projectile);
                 missileObj.projectile.rotation = this.playerShip.ship.rotation;
                 this.missilesActive.push(missileObj);
