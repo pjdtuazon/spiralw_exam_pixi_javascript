@@ -62,27 +62,30 @@
     
     app.render(app.stage);
 
+    
     var gameTex = {
-        bg: "img/sprite_text.png", 
+        bg: "img/purple.png", 
         play_button: "img/button_test1.png",
-        spaceship: "img/test.png",
-        meteor: "img/meteor.png",
+        spaceship: "img/playerShip3_blue.png",
+        meteor: "img/meteorBrown_big4.png",
         missile: "img/missile.png",
         buttonAtlas: "img/controls.png",
         buttonMove: "img/buttonmove.png",
         buttonRight: "img/buttonright.png",
         buttonLeft: "img/buttonleft.png",
         buttonFire: "img/buttonfire.png",
+        bgPopup: "img/popup_bg1.png",
+        explosionAnim: "img/explosion.json"
     };
 
     for (var key in gameTex){
         console.log("key " + gameTex[key]);
         TextureLoader.add(gameTex[key])
     };
-
-   TextureLoader.load(setup);
-
     
+    TextureLoader.load(setup);
+
+    let explosionTextures = [];    
 
     let mainScene = new PIXI.Container();
     let gameScene = new PIXI.Container();
@@ -150,6 +153,57 @@
         }
     }
 
+    class VFXFactory
+    {
+        static createExplosions(position)
+        {
+           
+            let explosion = new PIXI.extras.AnimatedSprite(explosionTextures);
+            explosion.name = name;
+            explosion.x = app.screen.width * 0.5;
+            explosion.y = app.screen.height * 0.5;
+            explosion.anchor.set(0.5);
+
+            explosion.x = position.x;
+            explosion.y = position.y;
+
+            explosion.rotation = Math.random() * Math.PI;
+           // explosion.scale.set(0.75 + Math.random() * 0.5);
+            explosion.animationSpeed = 0.75;
+            explosion.loop = false;
+           
+            return explosion;
+        }
+    }
+
+    class SpriteFactory
+    {
+        static createSprite(spriteName, position, width, height)
+        {
+            let texture = Resources[spriteName].texture;
+            var sprite = new Sprite(texture);
+
+            sprite.x = position.x;
+            sprite.y = position.y;
+
+            sprite.pivot.set(0.5, 0.5);
+            sprite.anchor.set(0.5, 0.5);
+
+            sprite.width = width;
+            sprite.height = height;
+
+            return sprite;
+        }
+
+        static createSpriteFromAtlas(spriteName, position, rect)
+        {
+            
+            //TODO
+            
+        }
+
+    }
+
     class ButtonFactory
     {
         static createButton(spriteName, position)
@@ -188,6 +242,36 @@
             return button;
         }
 
+    }
+
+    class Popup
+    {
+        constructor(sceneName)
+        {
+            this.name = sceneName;
+
+            this.container = new PIXI.Container();
+            
+            app.stage.addChild(this.container);
+
+            let bgTexture = Resources[gameTex.bgPopup].texture;
+            var popupContainer = new PIXI.Container();
+                       
+            var bg = new Sprite(bgTexture);
+            bg.pivot.set(0.5, 0.5);
+            bg.anchor.set(0.5, 0.5);
+            bg.x = 240;
+            bg.y = 360;
+
+            popupContainer.addChild(bg);
+
+            this.buttonStart = ButtonFactory.createButton(gameTex.buttonRight, {x:240, y:360});
+            popupContainer.addChild(this.buttonStart);
+
+            this.container.addChild(popupContainer);
+        }
+
+       
     }
 
     class BattleShip 
@@ -348,8 +432,12 @@
         missilesPool = [];
         missilesActive = [];
 
+        explosionsPool = [];
+        explosionsActive = [];
+
         maxMeteor = 10;
-        maxMissiles = 50;
+        maxMissiles = 1;
+        maxExplosions = 5;
 
         constructor(sceneName)
         {
@@ -359,17 +447,80 @@
 
             app.stage.addChild(this.container);
 
-            
         }
 
         initialize()
         {
-            this.playerShip  = new BattleShip (gameTex.spaceship, {x:240, y:360}, 1);
+            let bgObj = SpriteFactory.createSprite(gameTex.bg, {x:240, y:360}, 480, 720);
+
+            this.container.addChild(bgObj);
+
+            this.playerShip  = new BattleShip (gameTex.spaceship, {x:240, y:360}, 2);
             
             this.container.addChild(this.playerShip.ship);
 
+                
         }
 
+        onKeyUp(key)
+        {
+            if (key.keyCode === 87 || key.keyCode === 38) {
+            // If the W key or the Up arrow is pressed, move the player up.
+                console.log("UP");
+                this.playerShip.move(false);
+            }
+
+            // S Key is 83
+            // Down arrow is 40
+            if (key.keyCode === 70) {
+                // If the S key or the Down arrow is pressed, move the player down.
+                console.log("fire");
+                this.spawnMissiles();
+            }
+
+            // A Key is 65
+            // Left arrow is 37
+            // D Key is 68
+            // Right arrow is 39
+            if ((key.keyCode === 65 || key.keyCode === 37) ||  (key.keyCode === 68 || key.keyCode === 39)) {
+                // If the A key or the Left arrow is pressed, move the player to the left.
+                console.log("LEFT");
+                this.playerShip.turnShip(0);
+            }
+        }
+
+        onKeyDown(key)
+        {
+            if (key.keyCode === 87 || key.keyCode === 38) {
+            // If the W key or the Up arrow is pressed, move the player up.
+                console.log("UP");
+                this.playerShip.move(true);
+            }
+
+            // S Key is 83
+            // Down arrow is 40
+            if (key.keyCode === 83 || key.keyCode === 40) {
+                // If the S key or the Down arrow is pressed, move the player down.
+                console.log("DOWN");
+            }
+
+            // A Key is 65
+            // Left arrow is 37
+            if (key.keyCode === 65 || key.keyCode === 37) {
+                // If the A key or the Left arrow is pressed, move the player to the left.
+                console.log("LEFT");
+                this.playerShip.turnShip(-1);
+            }
+
+            // D Key is 68
+            // Right arrow is 39
+            if (key.keyCode === 68 || key.keyCode === 39) 
+            {
+                console.log("RIGHT");
+                this.playerShip.turnShip(1);
+            
+            }
+        }
         getRandomLocation()
         {
             // var xRandomValue, yRandomValue;
@@ -378,7 +529,7 @@
             // yRandomValue = (Math.random() * 10) + 400 * (Math.random() < 0.5 ? -1 : 1);
 
             var index = Math. floor((Math.random() * 5));
-            console.log("Index Spawn " + index);
+            //console.log("Index Spawn " + index);
             
             //return {x:xRandomValue, y:yRandomValue};
             return fixedSpawns[index];
@@ -387,6 +538,7 @@
         // Pooling Meteors 
         spawnMeteor()
         {
+            //console.log("spawnMeteor " + this.meteorsActive.length + " " + this.meteorsPool.length);
             if(this.meteorsActive.length < this.maxMeteor && this.meteorsPool.length < 1)
             {
                 var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), 2, ProjectileType.METEOR);
@@ -408,6 +560,7 @@
 
         spawnMissiles()
         {
+            //console.log("spawnMissiles " + this.missilesActive.length + " " + this.missilesPool.length);
             if(this.missilesActive.length < this.maxMissiles && this.missilesPool.length < 1)
             {
                 var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, 2,  ProjectileType.MISSILE);
@@ -425,10 +578,43 @@
             }
         }
 
+        despawnExplosions(index)
+        {
+            var vfxExplosion = this.explosionsActive[index];
+            this.container.removeChild(vfxExplosion);
+            this.explosionsActive.splice(index, 1);
+            
+            this.explosionsPool.push(vfxExplosion);
+        }
+
+        spawnVFXExplosions(position)
+        {
+            if(this.explosionsActive.length < this.maxExplosions && this.explosionsPool.length < 1)
+            {
+                let vfxExplosion = VFXFactory.createExplosions(position);
+                this.container.addChild(vfxExplosion);
+                this.explosionsActive.push(vfxExplosion);
+                vfxExplosion.gotoAndPlay(0);
+                
+                vfxExplosion.onComplete = () =>
+                {
+                    this.despawnExplosions(0);
+                }
+            }
+            else if (this.explosionsPool.length > 0)
+            {
+                let vfxExplosionObj = this.explosionsPool.pop();
+                vfxExplosionObj.x = position.x;
+                vfxExplosionObj.y = position.y;
+                this.container.addChild(vfxExplosionObj);
+                this.explosionsActive.push(vfxExplosionObj);
+                vfxExplosionObj.gotoAndPlay(0);
+            }
+        }
+
         isOutOfBounds(target)
         {
-            
-            if(target.x > 1000 || target.x < -600 || target.y < -600|| target.y > 1000)
+            if(target.x > 900 || target.x < -100 || target.y < -100|| target.y > 900)
             {
                 return true;
             }
@@ -479,8 +665,8 @@
                         if(this.meteorsActive[ctr].collisionTest(this.playerShip.ship, 32))
                         {
                             console.log("PlayerShip HP deduction");
+                            this.spawnVFXExplosions(this.meteorsActive[ctr].projectile.position);
                             this.despawnMeteor(ctr);
-
                             ctr--;
                         }
                     }
@@ -534,10 +720,16 @@
 
     let gameboardScene = new GameScene("GameboardScene");
     let uiScene = new UIScene("UIScene");
+    let briefingPopup = new Popup("BriefingPopup");
     // setup scenes
     function setup()
     {
-        console.log("gameTex[play_button] " + gameTex.play_button);
+        
+        for (var i = 0; i < 16; i++) {
+            const texture = PIXI.Texture.from("explosion"+ i +".png");
+            explosionTextures.push(texture);
+        }
+
         bg = new Sprite(Resources[gameTex.play_button].texture);
         bg.pivot.set(0.5, 0.5);
         bg.anchor.set(0.5, 0.5);
@@ -553,7 +745,7 @@
         playButton.interactive = true;
         playButton.buttonMode = true;
         playButton.on('pointerdown', onButtonDown)
-        .on('pointerup', triggerAnimationUp)
+        .on('pointerup', onButtonUp)
         .on('pointerupoutside', onButtonUp)
         .on('pointerover', onButtonOver)
         .on('pointerout', onButtonOut);
@@ -562,8 +754,14 @@
         gameboardScene.initialize();
         uiScene.initialize();
 
+        //gameboardScene.container.addChild(briefingPopup.container);
+
         uiScene.setShipControls(gameboardScene.playerShip);
         uiScene.setInputListener(gameboardScene);
+
+        document.addEventListener('keydown', onKeyDown);
+            
+        document.addEventListener('keyup', onKeyUp);
 
         app.ticker.add(delta => {gameboardScene.update(delta);});
         app.ticker.add(delta => {uiScene.update(delta);});
@@ -573,7 +771,14 @@
         setTimeout(triggerMeteorFire, 1500);
 
     }
-
+    function onKeyDown(key)
+    {
+        gameboardScene.onKeyDown(key);
+    }3
+    function onKeyUp(key)
+    {
+        gameboardScene.onKeyUp(key);
+    }
     function triggerMeteorFire()
     {
         setTimeout(triggerMeteorFire, 1500);
@@ -620,27 +825,6 @@
             return;
         }
         console.log("onButtonOut"); //this.texture = textureButton;
-    }
-
-    function triggerAnimationUp()
-    {
-        app.ticker.add(hideTarget);
-        console.log("triggerAnimationUp");
-    }
-    
-    function hideTarget()
-    {
-       
-        var speed = 10;
-        console.log("running " + mainScene.y);
-
-        if(mainScene.y < -360)
-        {
-            console.log("stopping " + mainScene.y);
-            app.ticker.remove(hideTarget);
-        }
-
-        mainScene.y -= speed;
     }
 
     document.body.appendChild(app.view);
