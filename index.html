@@ -14,6 +14,7 @@
 </head>
   <script src="pixi/pixi.min.js"></script>
   <script src="game/Utils.js"></script>
+  <script src="game/Constants.js"></script>
   
 <body>
   <canvas id="gamecanvas"></canvas>
@@ -21,16 +22,9 @@
     
   //Create a Pixi Application
     const canvas = document.getElementById("gamecanvas");
-
-    
-    const CruiseSpeed=1.5;
-    const TurnSpeed=5;
-    const MissileSpeed=7;
-    const MeteorMaxSpeed=4;
-    const MinShipMeteorCollisionDist=200;
-
-    let screenHeight = 720;
-    let screenWidth = 480;
+   
+    let screenHeight = Constants.Screen.height;
+    let screenWidth = Constants.Screen.width;;
 
     var GameState = {
         INITIALIZE: 0, //no state, not running and pre-start
@@ -41,11 +35,18 @@
     };
 
     var fixedSpawns = [
-         {x:100, y:100},
-         {x:100, y:400},
-         {x:200, y:100},
-         {x:300, y:500},
-         {x:150, y:20},
+         {x:100, y:-100},
+         {x:200, y:-100},
+         {x:480, y:-100},
+         {x:100, y:820},
+         {x:200, y:820},
+         {x:480, y:820},
+         {x:580, y:200},
+         {x:580, y:600},
+         {x:580, y:400},
+         {x:-100, y:200},
+         {x:-100, y:600},
+         {x:-100, y:400},
          ];
 
     let gameState = GameState.START;
@@ -96,6 +97,12 @@
 
     let mainScene = new PIXI.Container();
     let gameScene = new PIXI.Container();
+
+    let textStyle = {
+        fontFamily: "Futura",
+        fontSize: 34,
+        fill: "white"
+        }
     
     var bg;
     let spaceship;
@@ -257,25 +264,34 @@
         {
             this.name = sceneName;
 
-            this.container = new PIXI.Container();
             
-            app.stage.addChild(this.container);
+            this.popupContainer = new PIXI.Container();
+            this.popupContainer.pivot.set(0.5, 0.5);
+            this.popupContainer.x = Constants.ScreenCenter.x;
+        }
 
-            let bgTexture = Resources[gameTex.bgPopup].texture;
-            var popupContainer = new PIXI.Container();
-                       
-            var bg = new Sprite(bgTexture);
-            bg.pivot.set(0.5, 0.5);
-            bg.anchor.set(0.5, 0.5);
-            bg.x = 240;
-            bg.y = 360;
+        initialize()
+        {
 
-            popupContainer.addChild(bg);
+            this.bg = new Sprite(Resources[gameTex.bgPopup].texture);
+            this.bg.pivot.set(0.5, 0.5);
+            this.bg.anchor.set(0.5, 0.5);
+            this.bg.x = 0;
+            this.bg.y = Constants.ScreenCenter.y;
+            
+            this.popupContainer.addChild(this.bg);
 
-            this.buttonStart = ButtonFactory.createButton(gameTex.buttonRight, {x:240, y:360});
-            popupContainer.addChild(this.buttonStart);
+            this.buttonStart = ButtonFactory.createButton(gameTex.buttonRight, {x:0, y:360});
 
-            this.container.addChild(popupContainer);
+            this.popupContainer.addChild(this.buttonStart);
+            // gameState = GameState.RUNNING;
+        }
+
+        onButtonUp(buttonDownEventListener)
+        {
+            this.buttonStart
+                .on('pointerup', buttonDownEventListener)
+               
         }
 
        
@@ -311,13 +327,32 @@
         {
             if(this.turn != 0)
             {
-                this.ship.rotation += Utils.degToRad(TurnSpeed * this.turnDirection);   
+                this.ship.rotation += Utils.degToRad(Constants.TurnSpeed * this.turnDirection);   
             }
 
             if(this.moveShip)
             {
+               
                 this.ship.x += this.velocity * Math.cos(this.ship.rotation);
                 this.ship.y += this.velocity * Math.sin(this.ship.rotation);
+
+                if(this.ship.x < 0)
+                {
+                    this.ship.x = Constants.Screen.width;
+                }
+                else if (this.ship.x > Constants.Screen.width)
+                {
+                    this.ship.x = 0;
+                }
+
+                if(this.ship.y < 0)
+                {
+                    this.ship.y = Constants.Screen.height;
+                }
+                else if (this.ship.y > Constants.Screen.height)
+                {
+                    this.ship.y = 0;
+                }
             }
 
         }
@@ -384,7 +419,7 @@
 
             this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660});
 
-            this.buttonFire = ButtonFactory.createButton(gameTex.buttonFire, {x:240, y:690});
+            this.buttonFire = ButtonFactory.createButton(gameTex.buttonFire, {x:240, y:680});
 
             this.container.addChild(this.buttonMove);
             this.container.addChild(this.buttonRight);
@@ -429,7 +464,48 @@
             
         }
     }
+    class HealthBar
+    {
+        constructor(position, maxWidth, height)
+        {
+            this.healthBar = new PIXI.Container();
+            this.healthBar.position.set(position.x, position.y);
+            //gameScene.addChild(healthBar);
 
+            //Create the black background rectangle
+            let innerBar = new PIXI.Graphics();
+            innerBar.beginFill(0x000000);
+            innerBar.drawRect(0, 0, maxWidth, height);
+            innerBar.endFill();
+            this.healthBar.addChild(innerBar);
+
+            //Create the front red rectangle
+            let outerBar = new PIXI.Graphics();
+            outerBar.beginFill(0xFF3300);
+            outerBar.drawRect(0, 0, maxWidth, height);
+            outerBar.endFill();
+            this.healthBar.addChild(outerBar);
+
+            this.healthBar.outer = outerBar;
+
+            this.maxWidth = maxWidth;
+        }
+
+        setProgress(percentProgress)
+        {
+            if(percentProgress > 1)
+            {
+                percentProgress = 1;
+            }
+
+            if(percentProgress < 0)
+            {
+                percentProgress = 0;
+            }
+
+            this.healthBar.outer.width = this.maxWidth * percentProgress;
+        }
+    }
     class GameScene
     {
         meteorsPool = [];
@@ -445,6 +521,12 @@
         maxMissiles = 1;
         maxExplosions = 5;
 
+        PlayerData = 
+        {
+            hp: 100,
+            score:0,
+        }
+
         constructor(sceneName)
         {
             this.name = sceneName;
@@ -452,45 +534,55 @@
             this.container = new PIXI.Container();
 
             app.stage.addChild(this.container);
-
+            
         }
 
         initialize()
         {
-            let bgObj = SpriteFactory.createSprite(gameTex.bg, {x:240, y:360}, 480, 720);
+            let bgObj = SpriteFactory.createSprite(gameTex.bg, Constants.ScreenCenter, Constants.Screen.width, Constants.Screen.height);
 
             this.container.addChild(bgObj);
 
-            this.playerShip  = new BattleShip (gameTex.spaceship, {x:240, y:360}, 2);
+            this.playerShip  = new BattleShip (gameTex.spaceship, Constants.ScreenCenter, Constants.CruiseSpeed);
             
             this.container.addChild(this.playerShip.ship);
 
-                
+            this.message = new PIXI.Text("Score:", textStyle);
+            
+            this.message.x = 10;
+            this.message.y = 32;
+
+            this.container.addChild(this.message);
+
+            this.timer = 0;
+
+            this.healthBarObj = new HealthBar({x:10, y:10}, 200, 10);
+            
+            this.container.addChild(this.healthBarObj.healthBar);
+
+        }
+
+        addChild(childObject)
+        {
+            this.container.addChild(childObject);
+        }
+
+        removeChild(childObject)
+        {
+            this.container.removeChild(childObject);
         }
 
         onKeyUp(key)
         {
             if (key.keyCode === 87 || key.keyCode === 38) {
-            // If the W key or the Up arrow is pressed, move the player up.
-                console.log("UP");
                 this.playerShip.move(false);
             }
 
-            // S Key is 83
-            // Down arrow is 40
             if (key.keyCode === 70) {
-                // If the S key or the Down arrow is pressed, move the player down.
-                console.log("fire");
                 this.spawnMissiles();
             }
 
-            // A Key is 65
-            // Left arrow is 37
-            // D Key is 68
-            // Right arrow is 39
             if ((key.keyCode === 65 || key.keyCode === 37) ||  (key.keyCode === 68 || key.keyCode === 39)) {
-                // If the A key or the Left arrow is pressed, move the player to the left.
-                console.log("LEFT");
                 this.playerShip.turnShip(0);
             }
         }
@@ -498,69 +590,47 @@
         onKeyDown(key)
         {
             if (key.keyCode === 87 || key.keyCode === 38) {
-            // If the W key or the Up arrow is pressed, move the player up.
                 console.log("UP");
                 this.playerShip.move(true);
             }
 
-            // S Key is 83
-            // Down arrow is 40
-            if (key.keyCode === 83 || key.keyCode === 40) {
-                // If the S key or the Down arrow is pressed, move the player down.
-                console.log("DOWN");
-            }
-
-            // A Key is 65
-            // Left arrow is 37
             if (key.keyCode === 65 || key.keyCode === 37) {
-                // If the A key or the Left arrow is pressed, move the player to the left.
                 console.log("LEFT");
                 this.playerShip.turnShip(-1);
             }
 
-            // D Key is 68
-            // Right arrow is 39
             if (key.keyCode === 68 || key.keyCode === 39) 
             {
-                console.log("RIGHT");
                 this.playerShip.turnShip(1);
-            
             }
         }
+
         getRandomLocation()
         {
-            // var xRandomValue, yRandomValue;
-
-            // xRandomValue = (Math.random() * 10) + 200 * (Math.random() < 0.5 ? -1 : 1);
-            // yRandomValue = (Math.random() * 10) + 400 * (Math.random() < 0.5 ? -1 : 1);
-
-            var index = Math. floor((Math.random() * 5));
+          
+            var index = Math. floor((Math.random() * fixedSpawns.length));
             //console.log("Index Spawn " + index);
             
-            //return {x:xRandomValue, y:yRandomValue};
+          
             return fixedSpawns[index];
         }
 
         // Pooling Meteors 
         spawnMeteor()
         {
-            //console.log("spawnMeteor " + this.meteorsActive.length + " " + this.meteorsPool.length);
             if(this.meteorsActive.length < this.maxMeteor && this.meteorsPool.length < 1)
             {
-                let maxSpeed =  Math.ceil(Math.random() * MeteorMaxSpeed);
-                console.log("maxSpeed " + maxSpeed + "" );
+                let maxSpeed =  Math.ceil(Math.random() * Constants.MeteorMaxSpeed);
                 var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), maxSpeed, ProjectileType.METEOR);
-                
                 meteor.setTarget(this.playerShip.ship);
                 this.container.addChild(meteor.projectile);
-
                 this.meteorsActive.push(meteor);
             }
             else if (this.meteorsPool.length > 0)
             {
                 var meteorObj = this.meteorsPool.pop();
                 meteorObj.projectile.position = this.getRandomLocation();
-                meteorObj.speed = Math.ceil(Math.random() * MeteorMaxSpeed);
+                meteorObj.speed = Math.ceil(Math.random() * Constants.MeteorMaxSpeed);
                 this.container.addChild(meteorObj.projectile);
                 meteorObj.setTarget(this.playerShip.ship);
                 this.meteorsActive.push(meteorObj);
@@ -572,7 +642,7 @@
             //console.log("spawnMissiles " + this.missilesActive.length + " " + this.missilesPool.length);
             if(this.missilesActive.length < this.maxMissiles && this.missilesPool.length < 1)
             {
-                var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, MissileSpeed,  ProjectileType.MISSILE);
+                var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, Constants.MissileSpeed,  ProjectileType.MISSILE);
                 this.container.addChild(missileObj.projectile);
                 missileObj.projectile.rotation = this.playerShip.ship.rotation;
                 this.missilesActive.push(missileObj);
@@ -629,20 +699,49 @@
             }
         }
 
+        updatePlayerDataDisplay()
+        {
+            this.healthBarObj.setProgress(this.PlayerData.hp / Constants.MaxHP);
+            this.message.text = "Score: " + this.PlayerData.score;
+        }
+        resetValues()
+        {
+            this.PlayerData.hp = Constants.MaxHP;
+            this.PlayerData.score = 0;
+
+            this.playerShip.ship.x = Constants.ScreenCenter.x; 
+            this.playerShip.ship.y = Constants.ScreenCenter.y;
+            this.playerShip.ship.rotation = Utils.degToRad(-90);
+        }
         update(delta)
         {
             switch(gameState)
             {
             case  GameState.START:
+                
+                this.resetValues();
+            this.updatePlayerDataDisplay();
                 break;
             case GameState.RUNNING:
                 if(this.playerShip != null)
                 {
                     this.playerShip.update(delta)
                 }
-
+                this.timer += delta;
                 this.updateMeteorPositions(delta);
                 this.updateMissilePositions(delta);
+
+                this.updatePlayerDataDisplay();
+
+                if(this.PlayerData.hp <= 0)
+                {
+                    console.log("Game over" + this.PlayerData.hp); 
+                    this.setGameOver();
+
+                }
+                
+                break;
+            case  GameState.GAME_OVER:
                 break;
             }
         }
@@ -671,9 +770,10 @@
                     {
                         this.meteorsActive[ctr].update(delta);
 
-                        if(this.meteorsActive[ctr].collisionTest(this.playerShip.ship, 32))
+                        if(this.meteorsActive[ctr].collisionTest(this.playerShip.ship, Constants.MinShipMeteorCollisionDist))
                         {
                             console.log("PlayerShip HP deduction");
+                            this.PlayerData.hp -= 5;
                             this.spawnVFXExplosions(this.meteorsActive[ctr].projectile.position);
                             this.despawnMeteor(ctr);
                             ctr--;
@@ -710,9 +810,10 @@
 
                         for(var ctr2 = 0; ctr2 < this.meteorsActive.length; ctr2++)
                         {
-                            if(this.meteorsActive[ctr2].collisionTest(this.missilesActive[ctr].projectile, 32))
+                            if(this.meteorsActive[ctr2].collisionTest(this.missilesActive[ctr].projectile, Constants.MinMissileMeteorCollisionDist))
                             {
                                 console.log("Destroy meteor");
+                                this.PlayerData.score += Constants.ScoreIncrement;
                                 this.despawnMeteor(ctr2);
                                 
                                 this.despawnMissiles(ctr);
@@ -725,6 +826,30 @@
                 }
             }
         }
+
+        setGameOver()
+        {
+            gameState = GameState.GAME_OVER;
+
+            gameboardScene.addChild(briefingPopup.popupContainer);
+            console.log(">> " + this.missilesActive.length + " .. " + this.meteorsActive.length);
+            if(this.missilesActive.length > 0)
+            {
+                while( this.missilesActive.length > 0)
+                {
+                    this.despawnMissiles(0);
+                }
+            }
+
+            if(this.meteorsActive.length > 0)
+            {
+                while( this.meteorsActive.length > 0 )
+                {
+                    this.despawnMeteor(0);
+                }
+            }
+        }
+      
     }
 
     let gameboardScene = new GameScene("GameboardScene");
@@ -739,60 +864,43 @@
             explosionTextures.push(texture);
         }
 
-        bg = new Sprite(Resources[gameTex.play_button].texture);
-        bg.pivot.set(0.5, 0.5);
-        bg.anchor.set(0.5, 0.5);
-        bg.scale.set(5, 5);
-
-        let playButton = new Sprite(Resources[gameTex.play_button].texture);
-        playButton.pivot.set(0.5, 0.5);
-        playButton.anchor.set(0.5, 0.5);
-        
-        playButton.x = 240;
-        playButton.y = 360;
-
-        playButton.interactive = true;
-        playButton.buttonMode = true;
-        playButton.on('pointerdown', onButtonDown)
-        .on('pointerup', onButtonUp)
-        .on('pointerupoutside', onButtonUp)
-        .on('pointerover', onButtonOver)
-        .on('pointerout', onButtonOut);
-
-
         gameboardScene.initialize();
         uiScene.initialize();
-
-        //gameboardScene.container.addChild(briefingPopup.container);
+        briefingPopup.initialize();
+        briefingPopup.onButtonUp(onButtonUp);
+        
+        gameboardScene.addChild(briefingPopup.popupContainer);
 
         uiScene.setShipControls(gameboardScene.playerShip);
         uiScene.setInputListener(gameboardScene);
 
-        document.addEventListener('keydown', onKeyDown);
-            
-        document.addEventListener('keyup', onKeyUp);
-
         app.ticker.add(delta => {gameboardScene.update(delta);});
         app.ticker.add(delta => {uiScene.update(delta);});
 
-        gameState = GameState.RUNNING;
+        gameState = GameState.START;
 
-        setTimeout(triggerMeteorFire, 1500);
+        setTimeout(triggerMeteorFire, Constants.SpawnMeteorWaitTime);
 
+        document.addEventListener('keydown', onKeyDown);
+        document.addEventListener('keyup', onKeyUp);
+        
     }
     function onKeyDown(key)
     {
         gameboardScene.onKeyDown(key);
-    }3
+    }
     function onKeyUp(key)
     {
         gameboardScene.onKeyUp(key);
     }
     function triggerMeteorFire()
     {
-        setTimeout(triggerMeteorFire, 1500);
+        if(gameState == GameState.RUNNING)
+        {
+            setTimeout(triggerMeteorFire,  Constants.SpawnMeteorWaitTime);
 
-        gameboardScene.spawnMeteor();
+            gameboardScene.spawnMeteor();
+        }
     }
 
     function setupGameScene()
@@ -800,9 +908,6 @@
 
     }
 
-    
-
-    
     function onButtonDown() {
         this.isdown = true;
     // this.texture = textureButtonDown;
@@ -817,7 +922,22 @@
         } else {
             //this.texture = textureButton;
         }
-        console.log("onButtonUp"); 
+        console.log("onButtonUp" + gameState); 
+        
+        if(gameState == GameState.START)
+        {
+            gameState = GameState.RUNNING;
+            gameboardScene.removeChild(briefingPopup.popupContainer);
+            setTimeout(triggerMeteorFire, 1500);
+        
+        }
+        else if (gameState == GameState.GAME_OVER)
+        {
+            gameboardScene.resetValues();
+            gameState = GameState.RUNNING;
+            gameboardScene.removeChild(briefingPopup.popupContainer);
+            setTimeout(triggerMeteorFire, 1500);
+        }
     }
 
     function onButtonOver() {
