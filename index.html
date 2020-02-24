@@ -10,7 +10,7 @@
   }
   </style>
   <meta charset="utf-8">
-  <title>Hello World</title>
+  <title>Meteor Dodge!</title>
 </head>
   <script src="pixi/pixi.min.js"></script>
   <script src="game/Utils.js"></script>
@@ -34,6 +34,11 @@
         GAME_OVER: 4, // set game over
     };
 
+    var ProjectileType = {
+        METEOR: 0,
+        MISSILE: 1,
+    };
+
     var fixedSpawns = [
          {x:100, y:-100},
          {x:200, y:-100},
@@ -51,9 +56,6 @@
 
     let gameState = GameState.START;
 
-    console.log("Created app and canvas");
-
-    //Add the canvas that Pixi automatically created for you to the HTML document
     let app = new PIXI.Application({
     view: canvas, 
     width: screenWidth, 
@@ -62,7 +64,6 @@
     autoDensity: true
     });
 
-    var distanceCur = 0;
     let Application = PIXI.Application,
         TextureLoader = PIXI.loader,
         TextureCache = PIXI.utils.TextureCache;
@@ -70,103 +71,51 @@
         Sprite = PIXI.Sprite;
     
     app.render(app.stage);
-
     
     var gameTex = {
-        bg: "img/purple.png", 
-        play_button: "img/button_test1.png",
-        spaceship: "img/playerShip3_blue.png",
-        meteor: "img/meteorBrown_big4.png",
-        missile: "img/missile.png",
-        buttonMove: "img/buttonmove.png",
-        buttonRight: "img/buttonright.png",
-        buttonLeft: "img/buttonleft.png",
-        buttonFire: "img/buttonfire.png",
-        bgPopup: "img/popup_bg1.png",
-        explosionAnim: "img/explosion.json"
+        bg: "img/game/background.png", 
+        play_button: "img/ui/button_test1.png",
+        spaceship: "img/game/playerShip3_blue.png",
+        missile: "img/game/missile.png",
+        bgPopup: "img/ui/popup_bg1.png",
+        explosionAnim: "img/game/explosion.json"
     };
+    var buttonTextures = 
+    {
+        buttonMove: "img/ui/buttonmove.png",
+        buttonMovePressed: "img/ui/buttonmove_pressed.png",
+        buttonRight: "img/ui/buttonright.png",
+        buttonRightPressed: "img/ui/buttonright_pressed.png",
+        buttonLeft: "img/ui/buttonleft.png",
+        buttonLeftPressed: "img/ui/buttonleft_pressed.png",
+        buttonFire: "img/ui/buttonfire.png",
+        buttonFirePressed: "img/ui/buttonfire_pressed.png",
+    }
+
+    var meteorTex = [
+        "img/game/meteorBrown_big1.png",
+        "img/game/meteorBrown_big2.png",
+        "img/game/meteorBrown_big3.png",
+        "img/game/meteorBrown_big4.png",
+    ];
 
     for (var key in gameTex){
-        console.log("key " + gameTex[key]);
         TextureLoader.add(gameTex[key])
+    };
+
+    for (var key in buttonTextures){
+        TextureLoader.add(buttonTextures[key])
+    };
+
+    for (var i = 0; i < meteorTex.length; i++)
+    {
+        TextureLoader.add(meteorTex[i]);
     };
     
     TextureLoader.load(setup);
 
     let explosionTextures = [];    
-
-    let mainScene = new PIXI.Container();
-    let gameScene = new PIXI.Container();
-
-    let textStyle = {
-        fontFamily: "Futura",
-        fontSize: 34,
-        fill: "white"
-        }
-    
-    var bg;
-    let spaceship;
-    var ProjectileType = {
-        METEOR: 0,
-        MISSILE: 1,
-    };
-    class Projectile
-    {
-        constructor(spriteName, position, speed, projectileType)
-        {
-            this.projectile = new Sprite(Resources[spriteName].texture);
-            this.projectile.x = position.x;
-            this.projectile.y = position.y;
-            
-            this.projectile.anchor.set(0.5, 0.5);
-            this.projectile.pivot.set(0.5, 0.5);
-
-            this.speed = speed;
-            this.type = projectileType;
-
-        }
-
-        setTarget(target)
-        {
-            this.direction = Utils.normalize(target, this.projectile);
-        }
-        
-        update (delta)
-        {
-            if(this.type == ProjectileType.METEOR)
-            {
-                this.moveToTarget();
-            }
-            else if(this.type == ProjectileType.MISSILE)
-            {
-                this.moveTowardsRotation();
-            }
-
-        }
-
-        moveToTarget()
-        {
-            this.projectile.x += this.direction.x * this.speed;
-            this.projectile.y += this.direction.y * this.speed;
-        }
-
-        moveTowardsRotation()
-        {
-            this.projectile.x += this.speed * Math.cos(this.projectile.rotation);
-            this.projectile.y += this.speed * Math.sin(this.projectile.rotation);
-        }
-
-        collisionTest(target, maxDistance)
-        {
-            var deltaX = target.x - this.projectile.x;
-            var deltaY = target.y - this.projectile.y;
-            var norm = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
-
-
-            return norm < maxDistance;
-        }
-    }
-
+  
     class VFXFactory
     {
         static createExplosions(position)
@@ -211,30 +160,90 @@
 
         static createSpriteFromAtlas(spriteName, position, rect)
         {
-            
             //TODO
+        }
+    }
+
+    class TextFactory
+    {
+        static createText(style, fontSize, position)
+        {
+            style.fontSize = fontSize;
+            var message = new PIXI.Text("", style);
             
+            message.x = position.x;
+            message.y = position.y;
+
+            return message;
         }
 
     }
+    class Button
+    {
+        constructor(spriteNormalTex, spritePressedTex)
+        {
+            this.button = new Sprite(spriteNormalTex);
 
+            this.button.pivot.set(0.5, 0.5);
+            this.button.anchor.set(0.5, 0.5);
+
+            this.button.interactive = true;
+            this.button.buttonMode = true;
+
+            this.spriteNormalTex = spriteNormalTex;
+            this.spritePressedTex = spritePressedTex;
+
+            this.button
+                .on('pointerupoutside', () => { this.isPressed(false); } )
+                .on('pointerover', () => { this.isPressed(false); } )
+                .on('pointerout', () => { this.isPressed(false); } );
+        }
+
+        setButtonListeners(buttonDown, buttonUp)
+        {
+            this.button.on('pointerdown', delta => { 
+                    this.isPressed(true);
+                    if(buttonDown!=null)
+                    buttonDown();
+                })
+                .on('pointerup',  delta => { 
+                    this.isPressed(false); 
+                    
+                    if(buttonUp!=null)
+                        buttonUp();
+                    });
+        }
+
+        setPosition(position)
+        {
+            this.button.x = position.x;
+            this.button.y = position.y;
+        }
+
+        isPressed(pressed)
+        {
+            if(pressed)
+            {
+                this.button.texture = this.spritePressedTex;
+            }
+            else
+            {
+                this.button.texture = this.spriteNormalTex;
+            }
+        }
+    }
     class ButtonFactory
     {
-        static createButton(spriteName, position)
+        static createButton(spriteName, spritePressed, position)
         {
-            let texture = Resources[spriteName].texture;
-            var button = new Sprite(texture);
+            let textureNormal = Resources[spriteName].texture;
+            let texturePressed = Resources[spritePressed].texture;
 
-            button.x = position.x;
-            button.y = position.y;
+            var buttonObj = new Button(textureNormal, texturePressed);
 
-            button.pivot.set(0.5, 0.5);
-            button.anchor.set(0.5, 0.5);
+            buttonObj.setPosition(position);
 
-            button.interactive = true;
-            button.buttonMode = true;
-
-            return button;
+            return buttonObj;
         }
 
         static createButtonFromAtlas(spriteName, position, rect)
@@ -255,7 +264,6 @@
 
             return button;
         }
-
     }
 
     class Popup
@@ -263,8 +271,6 @@
         constructor(sceneName)
         {
             this.name = sceneName;
-
-            
             this.popupContainer = new PIXI.Container();
             this.popupContainer.pivot.set(0.5, 0.5);
             this.popupContainer.x = Constants.ScreenCenter.x;
@@ -272,7 +278,6 @@
 
         initialize()
         {
-
             this.bg = new Sprite(Resources[gameTex.bgPopup].texture);
             this.bg.pivot.set(0.5, 0.5);
             this.bg.anchor.set(0.5, 0.5);
@@ -280,21 +285,80 @@
             this.bg.y = Constants.ScreenCenter.y;
             
             this.popupContainer.addChild(this.bg);
-
-            this.buttonStart = ButtonFactory.createButton(gameTex.buttonRight, {x:0, y:360});
-
-            this.popupContainer.addChild(this.buttonStart);
-            // gameState = GameState.RUNNING;
+            this.buttonStart = ButtonFactory.createButton(buttonTextures.buttonRight, buttonTextures.buttonRightPressed, {x:0, y:Constants.ScreenCenter.y});
+            this.popupContainer.addChild(this.buttonStart.button);
         }
 
         onButtonUp(buttonDownEventListener)
         {
-            this.buttonStart
-                .on('pointerup', buttonDownEventListener)
-               
+            this.buttonStart.setButtonListeners(buttonDownEventListener, ()=>{} );
+        }
+       
+    }
+    
+    class Projectile
+    {
+        constructor(spriteName, position, speed, projectileType)
+        {
+            this.projectile = new Sprite(Resources[spriteName].texture);
+            this.projectile.x = position.x;
+            this.projectile.y = position.y;
+            
+            this.projectile.anchor.set(0.5, 0.5);
+            this.projectile.pivot.set(0.5, 0.5);
+
+            this.speed = speed;
+            this.type = projectileType;
+
+            this.rotationSpeed = 0;
+            this.rotationDirection = 0;
+            
         }
 
-       
+        setTarget(target)
+        {
+            this.direction = Utils.normalize(target, this.projectile);
+        }
+        
+        update (delta)
+        {
+            if(this.type == ProjectileType.METEOR)
+            {
+                this.moveToTarget();
+            }
+            else if(this.type == ProjectileType.MISSILE)
+            {
+                this.moveTowardsRotation();
+            }
+
+            if(this.rotationSpeed > 0)
+            {
+                this.projectile.rotation += Utils.degToRad(this.rotationSpeed * this.rotationDirection); 
+            }
+
+        }
+
+        moveToTarget()
+        {
+            this.projectile.x += this.direction.x * this.speed;
+            this.projectile.y += this.direction.y * this.speed;
+        }
+
+        moveTowardsRotation()
+        {
+            this.projectile.x += this.speed * Math.cos(this.projectile.rotation);
+            this.projectile.y += this.speed * Math.sin(this.projectile.rotation);
+        }
+
+        collisionTest(target, maxDistance)
+        {
+            var deltaX = target.x - this.projectile.x;
+            var deltaY = target.y - this.projectile.y;
+            var norm = Math.sqrt((deltaX * deltaX) + (deltaY * deltaY));
+
+
+            return norm < maxDistance;
+        }
     }
 
     class BattleShip 
@@ -359,45 +423,6 @@
 
     }
 
-    class MainScene
-    {
-        constructor(sceneName)
-        {
-            this.name = sceneName;
-
-            this.container = new PIXI.Container();
-
-            app.stage.addChild(this.container);
-
-        }
-
-        initialize()
-        {
-            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600}, 
-            {x:0, y:0, width:64, height:64});
-            
-            this.container.addChild(this.buttonMove);
-        }
-
-        setViewController(uiViewController)
-        {
-
-            this.buttonMove
-                .on('pointerdown', delta => {  })
-                .on('pointerup',  delta => {  } )
-                .on('pointerupoutside', () => { } )
-                .on('pointerover', () => { } )
-                .on('pointerout', () => { } );
-
-        }
-
-        update(delta)
-        {
-            
-        }
-    }
-
-
     class UIScene
     {
         constructor(sceneName)
@@ -407,56 +432,31 @@
             this.container = new PIXI.Container();
 
             app.stage.addChild(this.container);
-
-            
         }
 
         initialize()
         {
-            this.buttonMove = ButtonFactory.createButton(gameTex.buttonMove, {x:240, y:600});
+            this.buttonMove = ButtonFactory.createButton(buttonTextures.buttonMove, buttonTextures.buttonMovePressed, {x:Constants.ScreenCenter.x, y:580});
+            this.buttonRight = ButtonFactory.createButton(buttonTextures.buttonRight, buttonTextures.buttonRightPressed, {x:Constants.ScreenCenter.x + 100, y:660});
+            this.buttonLeft = ButtonFactory.createButton(buttonTextures.buttonLeft, buttonTextures.buttonLeftPressed, {x:Constants.ScreenCenter.x - 100, y:660});
+            this.buttonFire = ButtonFactory.createButton(buttonTextures.buttonFire, buttonTextures.buttonFirePressed, {x:Constants.ScreenCenter.x, y:670});
 
-            this.buttonRight = ButtonFactory.createButton(gameTex.buttonRight, {x:340, y:660});
-
-            this.buttonLeft = ButtonFactory.createButton(gameTex.buttonLeft, {x:140, y:660});
-
-            this.buttonFire = ButtonFactory.createButton(gameTex.buttonFire, {x:240, y:680});
-
-            this.container.addChild(this.buttonMove);
-            this.container.addChild(this.buttonRight);
-            this.container.addChild(this.buttonLeft);
-            this.container.addChild(this.buttonFire);
+            this.container.addChild(this.buttonMove.button);
+            this.container.addChild(this.buttonRight.button);
+            this.container.addChild(this.buttonLeft.button);
+            this.container.addChild(this.buttonFire.button);
         }
 
         setShipControls(ship)
         {
-            this.buttonRight
-                .on('pointerdown', () => { ship.turnShip(1); })
-                .on('pointerup',  () => { ship.turnShip(0); } )
-                .on('pointerupoutside', () => { ship.turnShip(0);} )
-                .on('pointerover', () => { ship.turnShip(0);} )
-                .on('pointerout', () => { ship.turnShip(0);} );
-            this.buttonMove
-                .on('pointerdown', delta => { ship.move(true); })
-                .on('pointerup',  delta => { ship.move(false); } )
-                .on('pointerupoutside', () => { ship.turnShip(0);} )
-                .on('pointerover', () => { ship.turnShip(0);} )
-                .on('pointerout', () => { ship.turnShip(0);} );
-            this.buttonLeft
-                .on('pointerdown', () => { ship.turnShip(-1); })
-                .on('pointerup',  () => { ship.turnShip(0); } )
-                .on('pointerupoutside', () => { ship.turnShip(0);} )
-                .on('pointerover', () => { ship.turnShip(0);} )
-                .on('pointerout', () => { ship.turnShip(0);} );
+            this.buttonRight.setButtonListeners( delta => { ship.turnShip(1); }, delta => { ship.turnShip(0); })
+            this.buttonLeft.setButtonListeners( delta => { ship.turnShip(-1); }, delta => { ship.turnShip(0); })
+            this.buttonMove.setButtonListeners( delta => { ship.move(true); }, delta => { ship.move(false); })
         }
 
         setInputListener(inputListener)
         {
-            this.buttonFire
-                .on('pointerdown', () => {  })
-                .on('pointerup',  () => { inputListener.spawnMissiles(); } )
-                .on('pointerupoutside', () => {} )
-                .on('pointerover', () => { } )
-                .on('pointerout', () => { } );
+            this.buttonFire.setButtonListeners(()=> {}, () => { inputListener.spawnMissiles(); });
         }
 
         update(delta)
@@ -464,6 +464,7 @@
             
         }
     }
+
     class HealthBar
     {
         constructor(position, maxWidth, height)
@@ -481,7 +482,7 @@
 
             //Create the front red rectangle
             let outerBar = new PIXI.Graphics();
-            outerBar.beginFill(0xFF3300);
+            outerBar.beginFill(0x00FF00);
             outerBar.drawRect(0, 0, maxWidth, height);
             outerBar.endFill();
             this.healthBar.addChild(outerBar);
@@ -541,24 +542,18 @@
         {
             let bgObj = SpriteFactory.createSprite(gameTex.bg, Constants.ScreenCenter, Constants.Screen.width, Constants.Screen.height);
 
-            this.container.addChild(bgObj);
+            this.addChild(bgObj);
 
             this.playerShip  = new BattleShip (gameTex.spaceship, Constants.ScreenCenter, Constants.CruiseSpeed);
             
-            this.container.addChild(this.playerShip.ship);
+            this.addChild(this.playerShip.ship);
 
-            this.message = new PIXI.Text("Score:", textStyle);
-            
-            this.message.x = 10;
-            this.message.y = 32;
+            this.message  = TextFactory.createText(Constants.scoreTextStyle, 26, {x:10, y:32});
 
-            this.container.addChild(this.message);
-
-            this.timer = 0;
-
+            this.addChild(this.message);
             this.healthBarObj = new HealthBar({x:10, y:10}, 200, 10);
             
-            this.container.addChild(this.healthBarObj.healthBar);
+            this.addChild(this.healthBarObj.healthBar);
 
         }
 
@@ -607,53 +602,67 @@
 
         getRandomLocation()
         {
-          
             var index = Math. floor((Math.random() * fixedSpawns.length));
             //console.log("Index Spawn " + index);
-            
-          
+           
             return fixedSpawns[index];
         }
 
+        setMeteor(meteor)
+        {
+            let randomMeteor = Math.floor(Math.random() * 4);
+            
+            meteor.projectile.texture = Resources[meteorTex[randomMeteor]].texture;
+            meteor.projectile.position = this.getRandomLocation();
+            meteor.speed = Math.ceil(Math.random() * Constants.MeteorMaxSpeed);
+            meteor.rotationSpeed = Math.random() * 10;
+            meteor.rotationDirection = Math.floor(Math.random() * 2) == 0 ? -1 : 1;
+
+            this.addChild(meteor.projectile);
+            meteor.setTarget(this.playerShip.ship);
+            this.meteorsActive.push(meteor);
+            
+        }
         // Pooling Meteors 
         spawnMeteor()
         {
             if(this.meteorsActive.length < this.maxMeteor && this.meteorsPool.length < 1)
             {
                 let maxSpeed =  Math.ceil(Math.random() * Constants.MeteorMaxSpeed);
-                var meteor = new Projectile(gameTex.meteor, this.getRandomLocation(), maxSpeed, ProjectileType.METEOR);
-                meteor.setTarget(this.playerShip.ship);
-                this.container.addChild(meteor.projectile);
-                this.meteorsActive.push(meteor);
+                var meteorObj = new Projectile(meteorTex[0], this.getRandomLocation(), maxSpeed, ProjectileType.METEOR);
+                this.setMeteor(meteorObj);
+               
             }
             else if (this.meteorsPool.length > 0)
             {
                 var meteorObj = this.meteorsPool.pop();
-                meteorObj.projectile.position = this.getRandomLocation();
-                meteorObj.speed = Math.ceil(Math.random() * Constants.MeteorMaxSpeed);
-                this.container.addChild(meteorObj.projectile);
-                meteorObj.setTarget(this.playerShip.ship);
-                this.meteorsActive.push(meteorObj);
+                this.setMeteor(meteorObj);
             }
         }
 
+        setMissile(missileObj)
+        {
+            missileObj.projectile.position = this.playerShip.ship.position;
+            missileObj.projectile.rotation = this.playerShip.ship.rotation;
+            this.addChild(missileObj.projectile);
+            this.missilesActive.push(missileObj);
+        }
         spawnMissiles()
         {
+            if(gameState != GameState.RUNNING)
+            {
+                return;
+            }
             //console.log("spawnMissiles " + this.missilesActive.length + " " + this.missilesPool.length);
             if(this.missilesActive.length < this.maxMissiles && this.missilesPool.length < 1)
             {
                 var missileObj = new Projectile(gameTex.missile, this.playerShip.ship, Constants.MissileSpeed,  ProjectileType.MISSILE);
-                this.container.addChild(missileObj.projectile);
-                missileObj.projectile.rotation = this.playerShip.ship.rotation;
-                this.missilesActive.push(missileObj);
+                this.setMissile(missileObj);
             }
             else if (this.missilesPool.length > 0)
             {
                 var missileObj = this.missilesPool.pop();
-                missileObj.projectile.position = this.playerShip.ship.position;
-                missileObj.projectile.rotation = this.playerShip.ship.rotation;
-                this.container.addChild(missileObj.projectile);
-                this.missilesActive.push(missileObj);
+                this.setMissile(missileObj);
             }
         }
 
@@ -671,7 +680,7 @@
             if(this.explosionsActive.length < this.maxExplosions && this.explosionsPool.length < 1)
             {
                 let vfxExplosion = VFXFactory.createExplosions(position);
-                this.container.addChild(vfxExplosion);
+                this.addChild(vfxExplosion);
                 this.explosionsActive.push(vfxExplosion);
                 vfxExplosion.gotoAndPlay(0);
                 
@@ -685,7 +694,7 @@
                 let vfxExplosionObj = this.explosionsPool.pop();
                 vfxExplosionObj.x = position.x;
                 vfxExplosionObj.y = position.y;
-                this.container.addChild(vfxExplosionObj);
+                this.addChild(vfxExplosionObj);
                 this.explosionsActive.push(vfxExplosionObj);
                 vfxExplosionObj.gotoAndPlay(0);
             }
@@ -693,10 +702,22 @@
 
         isOutOfBounds(target)
         {
-            if(target.x > 900 || target.x < -100 || target.y < -100|| target.y > 900)
+            var position = target.projectile.position;
+            
+            if((target.type == ProjectileType.MISSILE) 
+                && (position.x > screenWidth || position.x < 0 
+                || position.y < 0|| position.y > screenHeight))
             {
                 return true;
             }
+            else if ((target.type == ProjectileType.METEOR) 
+                && (position.x > screenWidth + (Constants.MeteorWidth * 1.5) || position.x < -(Constants.MeteorWidth * 1.5) 
+                || position.y < -(Constants.MeteorHeight * 1.5) || position.y > screenHeight + (Constants.MeteorHeight * 1.5)))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         updatePlayerDataDisplay()
@@ -727,7 +748,7 @@
                 {
                     this.playerShip.update(delta)
                 }
-                this.timer += delta;
+                
                 this.updateMeteorPositions(delta);
                 this.updateMissilePositions(delta);
 
@@ -737,7 +758,6 @@
                 {
                     console.log("Game over" + this.PlayerData.hp); 
                     this.setGameOver();
-
                 }
                 
                 break;
@@ -761,7 +781,7 @@
             {
                 for(var ctr = 0; ctr < this.meteorsActive.length; ctr++)
                 {
-                    if(this.isOutOfBounds(this.meteorsActive[ctr].projectile))
+                    if(this.isOutOfBounds(this.meteorsActive[ctr]))
                     {
                         this.despawnMeteor(ctr);
                         ctr--;
@@ -788,7 +808,6 @@
             var missileObj = this.missilesActive[index];
             this.container.removeChild(missileObj.projectile);
             this.missilesActive.splice(index, 1);
-            
             this.missilesPool.push(missileObj);
         }
 
@@ -798,9 +817,8 @@
             {
                 for(var ctr = 0; ctr < this.missilesActive.length; ctr++)
                 {
-                    if(this.isOutOfBounds(this.missilesActive[ctr].projectile))
+                    if(this.isOutOfBounds(this.missilesActive[ctr]))
                     {
-                        
                         this.despawnMissiles(ctr);
                         ctr--;
                     }
@@ -813,12 +831,14 @@
                             if(this.meteorsActive[ctr2].collisionTest(this.missilesActive[ctr].projectile, Constants.MinMissileMeteorCollisionDist))
                             {
                                 console.log("Destroy meteor");
+                                this.spawnVFXExplosions(this.missilesActive[ctr].projectile.position);
+
                                 this.PlayerData.score += Constants.ScoreIncrement;
                                 this.despawnMeteor(ctr2);
-                                
                                 this.despawnMissiles(ctr);
-                                ctr--;
                                 
+                                ctr--;
+
                                 break;
                             }
                         }
@@ -832,7 +852,7 @@
             gameState = GameState.GAME_OVER;
 
             gameboardScene.addChild(briefingPopup.popupContainer);
-            console.log(">> " + this.missilesActive.length + " .. " + this.meteorsActive.length);
+            
             if(this.missilesActive.length > 0)
             {
                 while( this.missilesActive.length > 0)
@@ -901,11 +921,6 @@
 
             gameboardScene.spawnMeteor();
         }
-    }
-
-    function setupGameScene()
-    {
-
     }
 
     function onButtonDown() {
