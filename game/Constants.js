@@ -12,17 +12,5 @@ class Constants
     static MinMissileMeteorCollisionDist=40;
     static MaxHP = 100;
     static ScoreIncrement = 10;
-    static MeteorWidth = 96;
-    static MeteorHeight = 96;
 
-    static scoreTextStyle = {
-        fontFamily: "Futura",
-        fontSize: 26,
-        fill: "white"
-        };
-    static defaultTextStyle = {
-        fontFamily: "Tahoma",
-        fontSize: 34,
-        fill: "white"
-        };
 }
